@@ -6,7 +6,7 @@ import os
 # API Configuration - 从系统环境变量获取，如果没有则使用默认值
 API_KEY = os.getenv('POE_API_KEY', '')
 BASE_URL = os.getenv('BASE_URL', 'https://api.poe.com/v1')
-MODEL_NAME = os.getenv('MODEL_NAME', 'gemini-3-pro')
+MODEL_NAME = os.getenv('MODEL_NAME', 'kimi-k2-thinking') # kimi-k2-thinking, gemini-3-pro, deepseek-v3.1
 NANO_BANANA_MODEL = os.getenv('NANO_BANANA_MODEL', 'nano-banana-pro')
 
 # File paths - 使用相对于当前脚本文件的路径
