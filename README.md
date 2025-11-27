@@ -44,11 +44,6 @@
 python main.py
 ```
 
-或者使用完整路径运行：
-```bash
-/Users/guochenyi/anaconda3/bin/python3 /Users/guochenyi/Documents/01work/python\ work/one-paper-one-figure/main.py
-```
-
 ### 方法二：创建 Mac 应用程序包
 运行以下命令创建 .app 包：
 ```bash
