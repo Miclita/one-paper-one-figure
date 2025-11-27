@@ -74,10 +74,15 @@ Step 1: Content Extraction
 Analyze the paper and extract the following to ensure the visual summary is accurate:
 1. Title: The exact paper title.
 2. Metadata for Footer (New Requirement):
-- Affiliation: The primary university or research lab (e.g., MIT, Google DeepMind).
-- Authors: The first author's name + "et al." (or top 2 authors if space permits).
-- Venue & Year: The journal/conference name and publication year (e.g., CVPR 2024, Nature 2023).
-3. Left Column Content (Background & Problem): What is the context? What is the specific pain point or gap? (Visual metaphors: e.g., noisy data, diseased tissue, bottleneck).
+    - Affiliation: The primary university or research lab (e.g., MIT, Google DeepMind).
+    - Authors: The first author's name + "et al." (or top 2 authors if space permits).
+    - Venue & Year: The journal/conference name and publication year (e.g., CVPR 2024, Nature 2023).
+3. **Left Panel Content (Split into Background & Data):**
+   - **Top - The Context:** What is the context? What is the specific pain point or gap? (Visual metaphors: e.g., noisy data, diseased tissue, bottleneck).
+   - **Bottom - The Data Source:** Search the text for **exact quantitative details**. Look for:
+     - **Specific Dataset Names** (e.g., "COCO", "MIMIC-III", "UK Biobank").
+     - **Exact Sample Sizes/Numbers** (e.g., "N=12,450", "500 hours", "100k images").
+     - *Note: Do not use terms like "massive" or "large-scale"; extract the actual numbers.*
 4. Center Column Content (The Method/Core Mechanism): How was it solved? (Visuals: Flowchart, architecture diagram, chemical process, step-by-step pipeline).
 5. Right Column Content (Results & Conclusion): What is the outcome? (Visuals: Clean bar charts, comparison graphs, clear images, performance metrics).
   
@@ -88,7 +93,10 @@ Structure of the Output Prompt:
 Please write the final prompt in a single code block. The prompt must include:
 - Composition: "A professional wide scientific poster layout divided into three distinct vertical panels (Left, Center, Right) on a **pure white background**. Content should be organized inside **clean rounded-corner rectangular containers (cards)** with subtle drop shadows, resembling a modern UI design."
 - Top Header: "The title '[Insert Title Here]' written clearly at the top in modern sans-serif font."
-- Left Panel (The Challenge): Describe visuals representing the Background and Problem inside a rounded card. Use icons or diagrams representing the 'current limitation'.
+- **Left Panel (Split Layout):**
+  - **Instruction:** "Divide the Left Panel horizontally into two distinct sections:"
+  - **Top Section (Context - approx 75% height):** Describe visuals representing the Background and Problem. Use darker or chaotic tones to represent the 'problem state'.
+  - **Bottom Section (Data Source - approx 25% height):** A compact, separate box or area below the context. It must feature icons representing databases or files (e.g., folder icons, grid of thumbnails). **Crucially, include the text '[Insert Exact Dataset Name/Size extracted from Step 1]' clearly in this bottom section.** (e.g., text "N=12,450" or "Dataset: ImageNet").
 - Center Panel (The Solution): Describe the Method. This should be the largest section, featuring a **clear flowchart with arrows connecting steps**, utilizing flat vector icons (e.g., gears, neural networks, molecules).
 - Right Panel (The Result): Describe the Results inside a rounded card. Use **simplified bar charts or comparison graphs** with a clear 'check mark' or upward trend to represent success.
 - Bottom Footer: "A distinct, narrow horizontal footer bar at the very bottom of the poster. It contains three text elements: 
