@@ -1,0 +1,9 @@
+/.DS_Store
+/.env.example
+/__pycache__
+/config v1.0.py
+/output
+/temp
+/test_image_saving.py
+/test_nanobanana.py
+/test_nanobanana_cli.py
