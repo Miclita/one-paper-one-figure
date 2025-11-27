@@ -1,6 +1,6 @@
 # PDF to Image Generator
 
-一个可在 macOS 上双击运行的应用程序，用于将 PDF 文件上传到大语言模型（如 Gemini）进行处理，并使用 Nano-Banana 生成图像。
+一个将 PDF 文件上传到大语言模型（如 Gemini）进行处理，并使用 Nano-Banana 生成图像的工具，使用POE API 进行处理。
 
 ## 功能特点
 
