@@ -4,16 +4,21 @@ PDF to Image Generator Application
 此应用程序允许用户上传PDF文件，通过大模型处理，并使用Nano-Banana生成图像。
 """
 
-import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
-import os
 import sys
+import os
 import subprocess
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QLabel, QPushButton, QLineEdit, QTextEdit, QFileDialog, 
+    QMessageBox, QTabWidget, QComboBox, QScrollArea, QGroupBox,
+    QSizePolicy
+)
+from PySide6.QtCore import Qt, QThread, Signal, Slot
+from PySide6.QtGui import QFont, QPalette
 
 # 导入自定义模块
 from pdf_handler import read_pdf_content, get_pdf_info
@@ -23,298 +28,48 @@ from image_generator import generate_and_save_image
 from config import API_KEY, BASE_URL, MODEL_NAME, NANO_BANANA_MODEL, PROMPT_TEMPLATES
 
 
-class PDFImageGeneratorApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("PDF to Image Generator")
-        self.root.geometry("900x700")
-        self.root.minsize(800, 600)  # 设置最小窗口尺寸
+class WorkerThread(QThread):
+    """工作线程，用于在后台处理PDF"""
+    log_signal = Signal(str)
+    finished_signal = Signal(bool, str)  # (success, message)
+    
+    def __init__(self, pdf_file_path, api_key, base_url, model_name, nanobanana_model, prompt):
+        super().__init__()
+        self.pdf_file_path = pdf_file_path
+        self.api_key = api_key
+        self.base_url = base_url
+        self.model_name = model_name
+        self.nanobanana_model = nanobanana_model
+        self.prompt = prompt
         
-        # 设置主题样式
-        self.style = ttk.Style("cosmo")  # 使用cosmo主题
+    def log_message(self, message):
+        """发送日志消息到主线程"""
+        self.log_signal.emit(message)
         
-        # 文件路径变量
-        self.pdf_file_path = tk.StringVar()
-        self.api_key = tk.StringVar(value=os.getenv("POE_API_KEY", API_KEY))  # 优先使用环境变量
-        self.base_url = tk.StringVar(value=BASE_URL)
-        self.model_name = tk.StringVar(value=MODEL_NAME)
-        self.nanobanana_model = tk.StringVar(value=NANO_BANANA_MODEL)
-        
-        # 提示词模板变量
-        self.prompt_templates = PROMPT_TEMPLATES
-        self.selected_template = tk.StringVar(value=list(PROMPT_TEMPLATES.keys())[0])  # 默认选择第一个模板
-        
-        # 创建UI
-        self.create_widgets()
-        
-        # 设置默认选中的标签页为"文件选择"
-        self.notebook.select(1)  # 选择索引为1的标签页（文件选择）
-
-        
-    def create_widgets(self):
-        # 主标题
-        title_frame = ttk.Frame(self.root)
-        title_frame.pack(fill=tk.X, pady=10)
-        
-        title_label = ttk.Label(
-            title_frame, 
-            text="PDF to Image Generator", 
-            font=("Arial", 18, "bold"),
-            bootstyle="primary"
-        )
-        title_label.pack()
-        
-        # 创建 Notebook 用于分隔不同功能区域
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill=BOTH, expand=YES, padx=10, pady=10)
-        
-        # 绑定标签页切换事件
-        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
-        
-        # API设置标签页
-        api_frame = ttk.Frame(self.notebook)
-        self.notebook.add(api_frame, text="API 设置")
-        
-        # API Key
-        api_key_frame = ttk.Frame(api_frame)
-        api_key_frame.pack(fill=X, padx=10, pady=5)
-        ttk.Label(api_key_frame, text="API Key:", width=20).pack(side=LEFT)
-        ttk.Entry(api_key_frame, textvariable=self.api_key, show="*").pack(side=LEFT, fill=X, expand=YES, padx=(0, 10))
-        
-        # Base URL
-        base_url_frame = ttk.Frame(api_frame)
-        base_url_frame.pack(fill=X, padx=10, pady=5)
-        ttk.Label(base_url_frame, text="Base URL:", width=20).pack(side=LEFT)
-        ttk.Entry(base_url_frame, textvariable=self.base_url).pack(side=LEFT, fill=X, expand=YES, padx=(0, 10))
-        
-        # Model Name
-        model_frame = ttk.Frame(api_frame)
-        model_frame.pack(fill=X, padx=10, pady=5)
-        ttk.Label(model_frame, text="Model Name:", width=20).pack(side=LEFT)
-        ttk.Entry(model_frame, textvariable=self.model_name).pack(side=LEFT, fill=X, expand=YES, padx=(0, 10))
-        
-        # Nano-Banana Model
-        nanobanana_frame = ttk.Frame(api_frame)
-        nanobanana_frame.pack(fill=X, padx=10, pady=5)
-        ttk.Label(nanobanana_frame, text="Nano-Banana Model:", width=20).pack(side=LEFT)
-        ttk.Entry(nanobanana_frame, textvariable=self.nanobanana_model).pack(side=LEFT, fill=X, expand=YES, padx=(0, 10))
-        
-        # 文件选择标签页
-        file_frame = ttk.Frame(self.notebook)
-        self.notebook.add(file_frame, text="文件选择")
-        
-        # 文件路径显示
-        file_select_frame = ttk.Frame(file_frame)
-        file_select_frame.pack(fill=X, padx=10, pady=10)
-        ttk.Label(file_select_frame, text="选择的文件:", width=15).pack(side=LEFT)
-        ttk.Entry(file_select_frame, textvariable=self.pdf_file_path, state="readonly").pack(side=LEFT, fill=X, expand=YES, padx=(0, 10))
-        ttk.Button(file_select_frame, text="浏览...", command=self.browse_pdf, bootstyle="info").pack(side=LEFT)
-        
-        # PDF信息显示
-        self.pdf_info_label = ttk.Label(file_frame, text="", bootstyle="secondary")
-        self.pdf_info_label.pack(padx=10, pady=5)
-        
-        # 提示词标签页
-        prompt_frame = ttk.Frame(self.notebook)
-        self.notebook.add(prompt_frame, text="提示词设置")
-        
-        # 模板选择
-        template_frame = ttk.Frame(prompt_frame)
-        template_frame.pack(fill=X, padx=10, pady=5)
-        
-        ttk.Label(template_frame, text="选择提示词模板:", width=15).pack(side=LEFT)
-        self.template_combobox = ttk.Combobox(
-            template_frame, 
-            textvariable=self.selected_template,
-            values=list(self.prompt_templates.keys()),
-            state="readonly"
-        )
-        self.template_combobox.pack(side=LEFT, fill=X, expand=YES, padx=(0, 10))
-        self.template_combobox.bind("<<ComboboxSelected>>", self.on_template_selected)
-        
-        # 内置提示词说明
-        prompt_info = ttk.Label(
-            prompt_frame, 
-            text="内置提示词（请在下方输入您的自定义提示词，留空将使用选定的模板）:",
-            bootstyle="secondary"
-        )
-        prompt_info.pack(anchor=W, padx=10, pady=(10, 5))
-        
-        # 默认提示词显示（不可编辑）
-        default_prompt_label = ttk.Label(
-            prompt_frame, 
-            text="选定模板内容:", 
-            font=("Arial", 10, "bold")
-        )
-        default_prompt_label.pack(anchor=W, padx=10, pady=5)
-        
-        self.default_prompt_text = scrolledtext.ScrolledText(
-            prompt_frame, 
-            height=8,
-            bg="#f8f8f8"
-        )
-        self.default_prompt_text.pack(fill=BOTH, expand=YES, padx=10, pady=5)
-        
-        # 显示默认模板内容
-        first_template = list(self.prompt_templates.keys())[0]
-        self.default_prompt_text.insert(tk.END, self.prompt_templates[first_template])
-        self.default_prompt_text.config(state=tk.DISABLED)  # 设置为只读
-        
-        ttk.Label(
-            prompt_frame, 
-            text="自定义提示词:", 
-            font=("Arial", 10, "bold")
-        ).pack(anchor=W, padx=10, pady=(10, 5))
-        
-        self.prompt_text = scrolledtext.ScrolledText(prompt_frame, height=6)
-        self.prompt_text.pack(fill=BOTH, expand=YES, padx=10, pady=5)
-        
-        # 结果显示标签页
-        result_frame = ttk.Frame(self.notebook)
-        self.notebook.add(result_frame, text="处理结果")
-        
-        self.result_text = scrolledtext.ScrolledText(result_frame)
-        self.result_text.pack(fill=BOTH, expand=YES, padx=10, pady=10)
-        
-        # 操作按钮框架
-        button_frame = ttk.Frame(self.root)
-        button_frame.pack(fill=X, padx=10, pady=(0, 10))
-        
-        ttk.Button(
-            button_frame, 
-            text="处理PDF并生成图像", 
-            command=self.process_pdf,
-            bootstyle="success"
-        ).pack(side=LEFT, padx=5)
-        
-        # 打开输出目录按钮（常驻）
-        self.open_dir_button = ttk.Button(
-            button_frame, 
-            text="打开图像目录", 
-            command=lambda: self.open_output_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')),
-            bootstyle="info"
-        )
-        self.open_dir_button.pack(side=LEFT, padx=5)
-        
-        ttk.Button(
-            button_frame, 
-            text="退出", 
-            command=self.root.quit,
-            bootstyle="danger"
-        ).pack(side=RIGHT, padx=5)
-        
-    def on_template_selected(self, event):
-        """当用户选择不同的提示词模板时调用"""
-        selected = self.selected_template.get()
-        self.default_prompt_text.config(state=tk.NORMAL)  # 临时启用编辑
-        self.default_prompt_text.delete(1.0, tk.END)
-        self.default_prompt_text.insert(tk.END, self.prompt_templates[selected])
-        self.default_prompt_text.config(state=tk.DISABLED)  # 重新设为只读
-        
-    def on_tab_changed(self, event):
-        """标签页切换事件处理"""
-        # 获取当前选中的标签页索引
-        selected_tab_index = self.notebook.index(self.notebook.select())
-        
-        # 更新标签页样式以突出显示当前选中项
-        for i in range(self.notebook.index("end")):
-            tab_id = self.notebook.tabs()[i]
-            if i == selected_tab_index:
-                # 当前选中的标签页使用强调样式
-                pass  # ttkbootstrap 的 notebook 不支持动态更改标签页样式
-            else:
-                # 其他标签页使用默认样式
-                pass  # ttkbootstrap 的 notebook 不支持动态更改标签页样式
-
-    def browse_pdf(self):
-        """浏览并选择PDF文件"""
-        file_path = filedialog.askopenfilename(
-            title="选择PDF文件",
-            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
-        )
-        if file_path:
-            self.pdf_file_path.set(file_path)
-            # 显示PDF信息
-            try:
-                pdf_info = get_pdf_info(file_path)
-                info_text = f"页数: {pdf_info['pages']}, 大小: {pdf_info['file_size']} 字节"
-                self.pdf_info_label.config(text=info_text)
-            except Exception as e:
-                self.pdf_info_label.config(text=f"无法获取PDF信息: {str(e)}", bootstyle="danger")
-            
-    def process_pdf(self):
-        """处理PDF文件的主要函数"""
-        # 切换到处理结果标签页
-        self.notebook.select(3)  # 选择索引为3的标签页（处理结果）
-        
-        # 检查必要参数
-        if not self.pdf_file_path.get():
-            self.log_message("✗ 错误: 请选择一个PDF文件")
-            return
-            
-        if not self.api_key.get():
-            self.log_message("✗ 错误: 请输入API密钥")
-            return
-            
-        # 获取用户自定义提示词，如果没有则使用默认提示词
-        user_prompt = self.prompt_text.get("1.0", tk.END).strip()
-        if not user_prompt:
-            # 使用选定的模板作为默认提示词
-            selected_template = self.selected_template.get()
-            user_prompt = self.prompt_templates[selected_template]
-            
-        self.result_text.delete(1.0, tk.END)
-        self.log_message("开始处理PDF文件...")
-        
-        try:
-            # 在新线程中执行处理任务，避免阻塞UI
-            import threading
-            thread = threading.Thread(target=self._process_pdf_thread)
-            thread.daemon = True
-            thread.start()
-        except Exception as e:
-            self.log_message(f"✗ 处理过程中出现错误: {str(e)}")
-            
-    def _process_pdf_thread(self):
+    def run(self):
         """在后台线程中处理PDF的实际工作"""
-        # 获取用户自定义提示词，如果没有则使用默认提示词
-        user_prompt = self.prompt_text.get("1.0", tk.END).strip()
-        if not user_prompt:
-            # 使用选定的模板作为默认提示词
-            selected_template = self.selected_template.get()
-            user_prompt = self.prompt_templates[selected_template]
-            
         try:
             # 读取PDF内容
             self.log_message("步骤 1/6: 正在读取PDF内容...")
-            pdf_content = read_pdf_content(self.pdf_file_path.get())
+            pdf_content = read_pdf_content(self.pdf_file_path)
             self.log_message(f"✓ PDF内容读取完成，共 {len(pdf_content)} 个字符")
             
             # 初始化LLM客户端
             self.log_message("步骤 2/6: 正在连接到大语言模型...")
             client = LLMClient(
-                api_key=self.api_key.get(),
-                base_url=self.base_url.get()
+                api_key=self.api_key,
+                base_url=self.base_url
             )
             self.log_message("✓ 大语言模型连接成功")
             
             # 发送请求到大语言模型
             self.log_message("步骤 3/6: 正在发送请求到大语言模型...")
-            llm_response = client.send_pdf_to_llm(pdf_content, user_prompt, self.model_name.get())
+            llm_response = client.send_pdf_to_llm(pdf_content, self.prompt, self.model_name)
             self.log_message("✓ 大语言模型响应接收完成")
             
             # 显示LLM响应摘要
             response_length = len(llm_response) if llm_response else 0
-            self.log_message(message=f"  响应长度: {response_length} 字符")
-            
-            # 输出第一步大模型响应返回的结果
-            self.log_message("  大模型完整响应:")
-            self.result_text.insert(tk.END, "大模型完整响应:\n")
-            self.result_text.insert(tk.END, "=" * 50 + "\n")
-            self.result_text.insert(tk.END, (llm_response or "") + "\n")
-            self.result_text.insert(tk.END, "=" * 50 + "\n\n")
-            self.result_text.see(tk.END)  # 滚动到底部
-            self.root.update()
+            self.log_message(f"  响应长度: {response_length} 字符")
             
             # 提取代码块
             self.log_message("步骤 4/6: 正在提取代码块...")
@@ -322,80 +77,432 @@ class PDFImageGeneratorApp:
             
             if not code_block:
                 self.log_message("⚠ 未在大语言模型响应中找到代码块")
-                # 显示完整响应供用户查看
-                self.result_text.insert(tk.END, "\n完整的大语言模型响应:\n")
-                self.result_text.insert(tk.END, "=" * 50 + "\n")
-                self.result_text.insert(tk.END, (llm_response or "") + "\n")
-                self.result_text.insert(tk.END, "=" * 50 + "\n\n")
-                raise Exception("未在大语言模型响应中找到代码块")
+                self.finished_signal.emit(False, "未在大语言模型响应中找到代码块")
+                return
                 
             self.log_message("✓ 代码块提取完成")
             code_length = len(code_block) if code_block else 0
             self.log_message(f"  代码块长度: {code_length} 字符")
-            
-            # 显示提取的代码块
-            self.result_text.insert(tk.END, "提取的代码块:\n")
-            self.result_text.insert(tk.END, "=" * 50 + "\n")
-            self.result_text.insert(tk.END, (code_block or "") + "\n")
-            self.result_text.insert(tk.END, "=" * 50 + "\n\n")
             
             # 使用Nano-Banana生成图像
             self.log_message("步骤 5/6: 正在使用Nano-Banana生成图像...")
             # 直接使用提取的代码块作为图像生成提示词
             image_path = generate_and_save_image(
                 code_block,
-                api_key=self.api_key.get(),
-                base_url=self.base_url.get(),
-                model_name=self.nanobanana_model.get()
+                api_key=self.api_key,
+                base_url=self.base_url,
+                model_name=self.nanobanana_model
             )
             self.log_message("✓ 图像生成完成")
             
             # 完成
             self.log_message("步骤 6/6: 图像已成功生成并保存")
             self.log_message(f"保存路径: {image_path}")
+            self.finished_signal.emit(True, "处理完成")
         except Exception as e:
             self.log_message(f"✗ 处理过程中出现错误: {str(e)}")
+            self.finished_signal.emit(False, str(e))
+
+
+class PDFImageGeneratorApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.pdf_file_path = ""
+        self.prompt_templates = PROMPT_TEMPLATES
+        self.selected_template = list(PROMPT_TEMPLATES.keys())[0]  # 默认选择第一个模板
+        
+        # API配置变量
+        self.api_key = os.getenv("POE_API_KEY", API_KEY)  # 优先使用环境变量
+        self.base_url = BASE_URL
+        self.model_name = MODEL_NAME
+        self.nanobanana_model = NANO_BANANA_MODEL
+        
+        self.init_ui()
+        
+    def init_ui(self):
+        """初始化UI界面"""
+        self.setWindowTitle("PDF to Image Generator")
+        self.setGeometry(100, 100, 900, 700)
+        self.setMinimumSize(800, 600)
+        
+        # 创建中央部件
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        
+        # 主标题
+        title_label = QLabel("PDF to Image Generator")
+        title_font = QFont()
+        title_font.setPointSize(18)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("color: #2c3e50; margin: 10px;")
+        main_layout.addWidget(title_label)
+        
+        # 创建标签页
+        self.tab_widget = QTabWidget()
+        main_layout.addWidget(self.tab_widget)
+        
+        # 创建各个标签页
+        self.create_api_settings_tab()
+        self.create_file_selection_tab()
+        self.create_prompt_settings_tab()
+        self.create_result_tab()
+        
+        # 创建按钮区域
+        self.create_button_area(main_layout)
+        
+        # 默认选中文件选择标签页
+        self.tab_widget.setCurrentIndex(1)
+        
+    def update_title_style(self):
+        """根据系统主题更新标题样式"""
+        palette = QApplication.palette()
+        is_dark_mode = palette.color(QPalette.ColorRole.Window).lightness() < 128
+        
+        if is_dark_mode:
+            # 暗黑模式下的样式
+            title_style = "color: #ffffff; margin: 10px;"
+        else:
+            # 明亮模式下的样式
+            title_style = "color: #2c3e50; margin: 10px;"
             
-    def open_output_directory(self, directory_path):
+        # 应用样式到标题
+        for widget in self.findChildren(QLabel):
+            if widget.text() == "PDF to Image Generator" and widget.font().pointSize() == 18:
+                widget.setStyleSheet(title_style)
+                break
+        
+    def create_api_settings_tab(self):
+        """创建API设置标签页"""
+        api_widget = QWidget()
+        layout = QVBoxLayout(api_widget)
+        layout.setSpacing(10)
+        
+        # API Key
+        api_key_group = QGroupBox("API 设置")
+        api_key_layout = QVBoxLayout(api_key_group)
+        
+        api_key_hbox = QHBoxLayout()
+        api_key_label = QLabel("API Key:")
+        api_key_label.setFixedWidth(120)
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setText(self.api_key)
+        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        api_key_hbox.addWidget(api_key_label)
+        api_key_hbox.addWidget(self.api_key_input)
+        api_key_layout.addLayout(api_key_hbox)
+        
+        # Base URL
+        base_url_hbox = QHBoxLayout()
+        base_url_label = QLabel("Base URL:")
+        base_url_label.setFixedWidth(120)
+        self.base_url_input = QLineEdit()
+        self.base_url_input.setText(self.base_url)
+        base_url_hbox.addWidget(base_url_label)
+        base_url_hbox.addWidget(self.base_url_input)
+        api_key_layout.addLayout(base_url_hbox)
+        
+        # Model Name
+        model_hbox = QHBoxLayout()
+        model_label = QLabel("Model Name:")
+        model_label.setFixedWidth(120)
+        self.model_input = QLineEdit()
+        self.model_input.setText(self.model_name)
+        model_hbox.addWidget(model_label)
+        model_hbox.addWidget(self.model_input)
+        api_key_layout.addLayout(model_hbox)
+        
+        # Nano-Banana Model
+        nanobanana_hbox = QHBoxLayout()
+        nanobanana_label = QLabel("Nano-Banana Model:")
+        nanobanana_label.setFixedWidth(120)
+        self.nanobanana_input = QLineEdit()
+        self.nanobanana_input.setText(self.nanobanana_model)
+        nanobanana_hbox.addWidget(nanobanana_label)
+        nanobanana_hbox.addWidget(self.nanobanana_input)
+        api_key_layout.addLayout(nanobanana_hbox)
+        
+        layout.addWidget(api_key_group)
+        layout.addStretch()
+        
+        self.tab_widget.addTab(api_widget, "API 设置")
+        
+    def create_file_selection_tab(self):
+        """创建文件选择标签页"""
+        file_widget = QWidget()
+        layout = QVBoxLayout(file_widget)
+        layout.setSpacing(10)
+        
+        # 文件选择区域
+        file_group = QGroupBox("文件选择")
+        file_layout = QVBoxLayout(file_group)
+        
+        file_hbox = QHBoxLayout()
+        file_label = QLabel("选择的文件:")
+        file_label.setFixedWidth(100)
+        self.file_path_input = QLineEdit()
+        self.file_path_input.setReadOnly(True)
+        browse_button = QPushButton("浏览...")
+        browse_button.clicked.connect(self.browse_pdf)
+        browse_button.setFixedWidth(80)
+        file_hbox.addWidget(file_label)
+        file_hbox.addWidget(self.file_path_input)
+        file_hbox.addWidget(browse_button)
+        file_layout.addLayout(file_hbox)
+        
+        # PDF信息显示
+        self.pdf_info_label = QLabel("")
+        self.pdf_info_label.setStyleSheet("color: #7f8c8d;")
+        file_layout.addWidget(self.pdf_info_label)
+        
+        layout.addWidget(file_group)
+        layout.addStretch()
+        
+        self.tab_widget.addTab(file_widget, "文件选择")
+        
+    def create_prompt_settings_tab(self):
+        """创建提示词设置标签页"""
+        prompt_widget = QWidget()
+        layout = QVBoxLayout(prompt_widget)
+        layout.setSpacing(10)
+        
+        # 模板选择
+        template_group = QGroupBox("提示词模板")
+        template_layout = QVBoxLayout(template_group)
+        
+        template_hbox = QHBoxLayout()
+        template_label = QLabel("选择提示词模板:")
+        template_label.setFixedWidth(120)
+        self.template_combo = QComboBox()
+        self.template_combo.addItems(list(self.prompt_templates.keys()))
+        self.template_combo.currentTextChanged.connect(self.on_template_selected)
+        template_hbox.addWidget(template_label)
+        template_hbox.addWidget(self.template_combo)
+        template_layout.addLayout(template_hbox)
+        
+        layout.addWidget(template_group)
+        
+        # 默认提示词显示
+        default_prompt_group = QGroupBox("选定模板内容（只读）")
+        default_prompt_layout = QVBoxLayout(default_prompt_group)
+        self.default_prompt_text = QTextEdit()
+        self.default_prompt_text.setReadOnly(True)
+        self.default_prompt_text.setMaximumHeight(200)
+        # 显示默认模板内容
+        first_template = list(self.prompt_templates.keys())[0]
+        self.default_prompt_text.setPlainText(self.prompt_templates[first_template])
+        default_prompt_layout.addWidget(self.default_prompt_text)
+        layout.addWidget(default_prompt_group)
+        
+        # 自定义提示词
+        custom_prompt_group = QGroupBox("自定义提示词")
+        custom_prompt_layout = QVBoxLayout(custom_prompt_group)
+        self.prompt_text = QTextEdit()
+        self.prompt_text.setMaximumHeight(200)
+        custom_prompt_layout.addWidget(self.prompt_text)
+        layout.addWidget(custom_prompt_group)
+        
+        layout.addStretch()
+        self.tab_widget.addTab(prompt_widget, "提示词设置")
+        
+    def create_result_tab(self):
+        """创建处理结果标签页"""
+        result_widget = QWidget()
+        layout = QVBoxLayout(result_widget)
+        
+        # 结果显示区域
+        self.result_text = QTextEdit()
+        self.result_text.setReadOnly(True)
+        layout.addWidget(self.result_text)
+        
+        self.tab_widget.addTab(result_widget, "处理结果")
+        
+    def create_button_area(self, main_layout):
+        """创建底部按钮区域"""
+        button_layout = QHBoxLayout()
+        
+        # 处理PDF按钮
+        self.process_button = QPushButton("处理PDF并生成图像")
+        self.process_button.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+            QPushButton:pressed {
+                background-color: #229954;
+            }
+        """)
+        self.process_button.clicked.connect(self.process_pdf)
+        button_layout.addWidget(self.process_button)
+        
+        # 打开目录按钮
+        open_dir_button = QPushButton("打开图像目录")
+        open_dir_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #5dade2;
+            }
+            QPushButton:pressed {
+                background-color: #2c81ba;
+            }
+        """)
+        open_dir_button.clicked.connect(self.open_output_directory)
+        button_layout.addWidget(open_dir_button)
+        
+        # 退出按钮
+        exit_button = QPushButton("退出")
+        exit_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #ec7063;
+            }
+            QPushButton:pressed {
+                background-color: #c0392b;
+            }
+        """)
+        exit_button.clicked.connect(self.close)
+        button_layout.addWidget(exit_button)
+        
+        main_layout.addLayout(button_layout)
+        
+    def on_template_selected(self, template_name):
+        """当用户选择不同的提示词模板时调用"""
+        self.selected_template = template_name
+        self.default_prompt_text.setPlainText(self.prompt_templates[template_name])
+        
+    def browse_pdf(self):
+        """浏览并选择PDF文件"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "选择PDF文件", 
+            "", 
+            "PDF files (*.pdf);;All files (*.*)"
+        )
+        if file_path:
+            self.pdf_file_path = file_path
+            self.file_path_input.setText(file_path)
+            # 显示PDF信息
+            try:
+                pdf_info = get_pdf_info(file_path)
+                info_text = f"页数: {pdf_info['pages']}, 大小: {pdf_info['file_size']} 字节"
+                self.pdf_info_label.setText(info_text)
+                self.pdf_info_label.setStyleSheet("color: #27ae60;")
+            except Exception as e:
+                self.pdf_info_label.setText(f"无法获取PDF信息: {str(e)}")
+                self.pdf_info_label.setStyleSheet("color: #e74c3c;")
+                
+    def process_pdf(self):
+        """处理PDF文件的主要函数"""
+        # 切换到处理结果标签页
+        self.tab_widget.setCurrentIndex(3)
+        
+        # 检查必要参数
+        if not self.pdf_file_path:
+            self.log_message("✗ 错误: 请选择一个PDF文件")
+            return
+            
+        api_key = self.api_key_input.text()
+        if not api_key:
+            self.log_message("✗ 错误: 请输入API密钥")
+            return
+            
+        # 获取用户自定义提示词，如果没有则使用默认提示词
+        user_prompt = self.prompt_text.toPlainText().strip()
+        if not user_prompt:
+            # 使用选定的模板作为默认提示词
+            user_prompt = self.prompt_templates[self.selected_template]
+            
+        self.result_text.clear()
+        self.log_message("开始处理PDF文件...")
+        
+        # 在新线程中执行处理任务，避免阻塞UI
+        self.worker_thread = WorkerThread(
+            self.pdf_file_path,
+            api_key,
+            self.base_url_input.text(),
+            self.model_input.text(),
+            self.nanobanana_input.text(),
+            user_prompt
+        )
+        self.worker_thread.log_signal.connect(self.log_message)
+        self.worker_thread.finished_signal.connect(self.on_process_finished)
+        self.worker_thread.start()
+        
+        # 禁用处理按钮，防止重复点击
+        self.process_button.setEnabled(False)
+        self.process_button.setText("处理中...")
+        
+    @Slot(bool, str)
+    def on_process_finished(self, success, message):
+        """处理完成后回调"""
+        self.process_button.setEnabled(True)
+        self.process_button.setText("处理PDF并生成图像")
+        if success:
+            self.log_message("✓ 全部处理完成")
+        else:
+            self.log_message(f"✗ 处理失败: {message}")
+        
+    def open_output_directory(self):
         """打开输出目录"""
         try:
+            output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
             if sys.platform == "darwin":  # macOS
-                subprocess.Popen(["open", directory_path])
+                subprocess.Popen(["open", output_dir])
             elif sys.platform == "win32":  # Windows
-                subprocess.Popen(["explorer", directory_path])
+                subprocess.Popen(["explorer", output_dir])
             else:  # Linux
-                subprocess.Popen(["xdg-open", directory_path])
+                subprocess.Popen(["xdg-open", output_dir])
         except Exception as e:
             self.log_message(f"✗ 无法打开目录: {str(e)}")
 
+    @Slot(str)
     def log_message(self, message):
-        """在结果文本框中记录消息并刷新界面"""
-        # 根据消息类型设置颜色
-        if message.startswith("✓"):
-            tag = "success"
-            self.result_text.tag_configure("success", foreground="green")
-        elif message.startswith("✗"):
-            tag = "error"
-            self.result_text.tag_configure("error", foreground="red")
-        elif message.startswith("⚠"):
-            tag = "warning"
-            self.result_text.tag_configure("warning", foreground="orange")
-        elif message.startswith("步骤"):
-            tag = "step"
-            self.result_text.tag_configure("step", foreground="blue", font=("Arial", 10, "bold"))
-        else:
-            tag = "normal"
-            self.result_text.tag_configure("normal", foreground="black")
-            
-        self.result_text.insert(tk.END, message + "\n", tag)
-        self.result_text.see(tk.END)  # 滚动到底部
-        self.root.update()
+        """在结果文本框中记录消息"""
+        self.result_text.append(message)
+        # 滚动到底部
+        scrollbar = self.result_text.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
 
 def main():
-    root = ttk.Window(themename="cosmo")  # 使用ttkbootstrap创建主窗口
-    app = PDFImageGeneratorApp(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    
+    # 创建主窗口
+    window = PDFImageGeneratorApp()
+    
+    # 连接主题变化信号
+    app.paletteChanged.connect(window.update_title_style)
+    
+    # 显示窗口
+    window.show()
+    
+    # 初始更新标题样式
+    window.update_title_style()
+    
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ PROMPT_TEMPLATES = {
 **Task:** Read the uploaded PDF and generate a detailed text-to-image prompt to create a horizontal "Scientific Poster" or "Graphical Abstract" that visually summarizes the paper.
 
 **Step 1: Precise Content Extraction**
- Analyze the paper and extract the following details. **You must be precise—do not use vague adjectives.**
+ Analyze the paper and extract the following details. **You must be precise — do not use vague adjectives.**
 
 1. **Title:** The exact paper title.
 2. **Metadata for Footer:**
@@ -51,7 +51,7 @@ Write a prompt for an AI image generator (like DALL-E 3). The prompt must strict
 - **Top Header:** "The title '[Insert Title Here]' written clearly at the top in modern sans-serif font."
 - **Left Panel (Split Layout):**
   - **Instruction:** "Divide the Left Panel horizontally into two distinct sections:"
-  - **Top Section (Context - approx 75% height):** Describe visuals representing the Background and Problem. Use darker or chaotic tones to represent the 'problem state'.
+  - **Top Section (Context - approx 75% height):** Describe visuals representing the Background and Problem. Use light gray tones to represent the 'problem state'.
   - **Bottom Section (Data Source - approx 25% height):** A compact, separate box or area below the context. It must feature icons representing databases or files (e.g., folder icons, grid of thumbnails). **Crucially, include the text '[Insert Exact Dataset Name/Size extracted from Step 1]' clearly in this bottom section.** (e.g., text "N=12,450" or "Dataset: ImageNet").
 - **Center Panel (The Solution):** Describe the Method. This should be the largest or most detailed section, featuring a technical diagram, flowchart, or schematic.
 - **Right Panel (The Result):** Describe the Results. Use bright, clean, and organized visuals (graphs, checkmarks, clear structures) to represent the 'solution state'.
