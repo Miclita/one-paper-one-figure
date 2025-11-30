@@ -1,16 +1,17 @@
 # PDF to Image Generator
 
-一个将 PDF 文件上传到大语言模型（如 Gemini）进行处理，并使用 Nano-Banana 生成图像的工具，使用POE API 进行处理。
+一个将 PDF 文件上传到大语言模型（如 Kimi、Gemini 等）进行处理，并使用 Nano-Banana 生成图像的工具，使用 POE API 进行处理。
 
 ## 功能特点
 
-- 简单易用的图形界面（采用现代化的 ttkbootstrap 界面）
+- 简单易用的现代化图形界面（采用 PySide6 框架，支持 macOS 明亮/暗黑主题自动适配）
 - 支持 PDF 文件上传和处理
-- 可配置的大语言模型 API（支持 Gemini 等）
+- 可配置的大语言模型 API（支持 Kimi、Gemini 等多种模型）
 - 自动提取大语言模型返回结果中的代码块
 - 使用 Nano-Banana 生成图像并保存
 - 实时进度反馈和详细日志显示
 - 内置专业的学术海报生成提示词，支持自定义提示词
+- 响应式布局，支持不同屏幕尺寸
 
 ## 安装说明
 
@@ -58,7 +59,7 @@ python setup.py py2app
 
 - `POE_API_KEY`: 您的 POE API 密钥
 - `BASE_URL`: API 基础 URL (默认: https://api.poe.com/v1)
-- `MODEL_NAME`: 用于 PDF 处理的大语言模型名称 (默认: gemini-3-pro)
+- `MODEL_NAME`: 用于 PDF 处理的大语言模型名称 (默认: kimi-k2-thinking)
 - `NANO_BANANA_MODEL`: 用于图像生成的 Nano-Banana 模型名称 (默认: nano-banana-pro)
 
 ## 工作原理
@@ -71,17 +72,21 @@ python setup.py py2app
 
 ## 内置专业提示词
 
-应用程序内置了一个专业的学术海报生成提示词，专为生成高质量的科研论文图形摘要而设计。该提示词指导大语言模型：
+应用程序内置了多个专业的学术海报生成提示词，专为生成高质量的科研论文图形摘要而设计。包括：
 
+1. **Nature风** - 仿 Nature、Science 期刊风格的专业学术海报
+2. **2D扁平** - 现代化扁平设计风格的图形摘要
+
+这些提示词指导大语言模型：
 1. 提取论文的关键信息（标题、作者、机构、发表 venue 等）
 2. 分析论文的背景问题、解决方案和实验结果
-3. 生成符合顶级期刊（如 Nature 和 Science）风格的三栏式科学海报提示词
+3. 生成符合顶级期刊风格的科学海报提示词
 
 该提示词可以帮助您将学术论文转换为专业的图形摘要，适用于学术报告、会议展示等场景。
 
 ## 界面说明
 
-应用界面采用了现代化的 ttkbootstrap 界面，包括以下几个主要标签页：
+应用界面采用了现代化的 PySide6 界面框架，包括以下几个主要标签页：
 
 1. **API 设置标签页** - 配置 API 密钥、基础 URL 和模型名称
 2. **文件选择标签页** - 浏览并选择要处理的 PDF 文件
@@ -93,14 +98,15 @@ python setup.py py2app
 - 每个步骤的状态指示（✓ 表示成功，✗ 表示错误，⚠ 表示警告）
 - 详细的日志信息帮助了解处理过程
 
+应用默认显示文件选择标签页，并在执行操作后自动跳转到处理结果页，同时允许在程序运行过程中切换标签页。
+
 ## 依赖项
 
 - Python 3.6+
-- tkinter (通常随 Python 一起提供)
+- PySide6
 - openai Python SDK
 - PyPDF2
 - Pillow
-- ttkbootstrap
 - python-dotenv
 
 ## 故障排除
@@ -116,8 +122,8 @@ pip install -r requirements.txt
 pip install PyPDF2
 ```
 
-### 关于 tkinter 的说明
-tkinter 是 Python 的标准 GUI 库，通常随 Python 一起安装，不需要单独安装。如果您遇到与 tkinter 相关的错误，请检查您的 Python 安装是否完整。
+### 关于 GUI 框架的说明
+项目现已使用 PySide6 重构 GUI 界面，相比之前的 ttkbootstrap/Tkinter 提供了更好的交互流畅性和现代化外观，同时支持 macOS 明亮/暗黑主题的自动适配。
 
 ### API 密钥配置
 您需要通过设置系统环境变量来配置 API 密钥：
